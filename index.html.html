@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Spese Giornaliere</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar per la tabella e lista */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col antialiased">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-emerald-500 text-white rounded-xl shadow-md shadow-emerald-500/20">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900 tracking-tight">SpeseJournal</h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">Gestione facile e rapida del tuo budget</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                    <i data-lucide="download" class="w-3.5 h-3.5 mr-1.5"></i> Esporta JSON
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Banner KPI / Schede riassuntive -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Spese di Oggi -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Spese di Oggi</p>
+                    <h2 id="kpi-today" class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">€ 0,00</h2>
+                    <p id="kpi-today-count" class="text-xs text-slate-500 mt-1">0 transazioni oggi</p>
+                </div>
+                <div class="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <i data-lucide="calendar" class="w-7 h-7"></i>
+                </div>
+            </div>
+
+            <!-- Spese del Mese -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Spese Mese Corrente</p>
+                    <h2 id="kpi-month" class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">€ 0,00</h2>
+                    <p id="kpi-month-name" class="text-xs text-slate-500 mt-1">Totale mensile</p>
+                </div>
+                <div class="p-3.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <i data-lucide="trending-down" class="w-7 h-7"></i>
+                </div>
+            </div>
+
+            <!-- Categoria top -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Maggiore Spesa (Mese)</p>
+                    <h2 id="kpi-top-category" class="text-xl sm:text-2xl font-bold text-slate-900 mt-1 truncate max-w-[180px]">N/D</h2>
+                    <p id="kpi-top-category-amount" class="text-xs text-slate-500 mt-1">€ 0,00 totali</p>
+                </div>
+                <div class="p-3.5 bg-amber-50 text-amber-600 rounded-xl">
+                    <i data-lucide="pie-chart" class="w-7 h-7"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sezione centrale: Form Inserimento e Grafico -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <div class="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <i data-lucide="plus-circle" class="w-5 h-5 text-emerald-600"></i>
+                        <h3 class="text-lg font-bold text-slate-900">Nuova Spesa</h3>
+                    </div>
+
+                    <form id="expense-form" class="space-y-4">
+                        <!-- Descrizione -->
+                        <div>
+                            <label for="expense-name" class="block text-xs font-semibold text-slate-600 mb-1">Descrizione / Oggetto *</label>
+                            <input type="text" id="expense-name" required placeholder="Es. Pranzo di lavoro, Benzina, Spesa..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-sm transition-all">
+                        </div>
+
+                        <!-- Importo e Categoria -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="expense-amount" class="block text-xs font-semibold text-slate-600 mb-1">Importo (€) *</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm">€</span>
+                                    <input type="number" id="expense-amount" step="0.01" min="0.01" required placeholder="0.00" class="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-sm transition-all">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="expense-category" class="block text-xs font-semibold text-slate-600 mb-1">Categoria *</label>
+                                <select id="expense-category" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-sm bg-white transition-all">
+                                    <option value="Cibo">🍕 Cibo & Ristoranti</option>
+                                    <option value="Trasporti">🚗 Trasporti & Auto</option>
+                                    <option value="Svago">🍿 Svago & Tempo Libero</option>
+                                    <option value="Casa">🏠 Casa & Bollette</option>
+                                    <option value="Salute">💊 Salute & Benessere</option>
+                                    <option value="Shopping">🛍️ Shopping</option>
+                                    <option value="Altro">📦 Altro</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Data -->
+                        <div>
+                            <label for="expense-date" class="block text-xs font-semibold text-slate-600 mb-1">Data *</label>
+                            <input type="date" id="expense-date" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-sm transition-all">
+                        </div>
+
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-emerald-600/20 transition-all duration-200 flex items-center justify-center space-x-2 mt-2">
+                            <i data-lucide="check" class="w-5 h-5"></i>
+                            <span>Aggiungi Spesa</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-600"></i>
+                            <h3 class="text-lg font-bold text-slate-900">Ripartizione per Categoria</h3>
+                        </div>
+                        <span id="chart-period-label" class="text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">Mese Corrente</span>
+                    </div>
+
+                    <div class="relative h-60 w-full flex items-center justify-center">
+                        <canvas id="categoryChart"></canvas>
+                        <div id="no-chart-data" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                            <i data-lucide="pie-chart" class="w-12 h-12 mb-2 stroke-1"></i>
+                            <p class="text-sm">Nessun dato disponibile per il grafico</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <section class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <!-- Header tabella e filtri -->
+            <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="list" class="w-5 h-5 text-slate-700"></i>
+                    <h3 class="text-lg font-bold text-slate-900">Storico Spese</h3>
+                    <span id="expense-count-badge" class="bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">0</span>
+                </div>
+
+                <!-- Filtri -->
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <!-- Filtro Categoria -->
+                    <select id="filter-category" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="ALL">Tutte le categorie</option>
+                        <option value="Cibo">Cibo & Ristoranti</option>
+                        <option value="Trasporti">Trasporti & Auto</option>
+                        <option value="Svago">Svago & Tempo Libero</option>
+                        <option value="Casa">Casa & Bollette</option>
+                        <option value="Salute">Salute & Benessere</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Altro">Altro</option>
+                    </select>
+
+                    <!-- Filtro Mese/Data -->
+                    <select id="filter-period" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="MONTH">Mese Corrente</option>
+                        <option value="TODAY">Oggi</option>
+                        <option value="ALL">Tutto lo storico</option>
+                    </select>
+
+                    <button id="reset-filters" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors" title="Resetta filtri">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabella per Desktop / Lista Card per Mobile -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-100">
+                            <th class="py-3 px-4">Data</th>
+                            <th class="py-3 px-4">Descrizione</th>
+                            <th class="py-3 px-4">Categoria</th>
+                            <th class="py-3 px-4 text-right">Importo</th>
+                            <th class="py-3 px-4 text-center">Azione</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expense-table-body" class="divide-y divide-slate-100 text-sm">
+                        <!-- Verrà popolato da Javascript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Stato Vuoto -->
+            <div id="empty-state" class="hidden p-12 text-center">
+                <div class="inline-flex p-4 bg-slate-50 rounded-full text-slate-400 mb-3">
+                    <i data-lucide="receipt" class="w-8 h-8"></i>
+                </div>
+                <p class="text-slate-600 font-medium">Nessuna spesa trovata</p>
+                <p class="text-slate-400 text-xs mt-1">Aggiungi una nuova spesa dal form o modifica i filtri selezionati.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- CATEGORIE E CONFIGURAZIONE COLORI ---
+        const CATEGORIES = {
+            'Cibo': { label: 'Cibo & Ristoranti', color: '#f59e0b', bg: '#fef3c7', text: '#92400e', icon: '🍕' },
+            'Trasporti': { label: 'Trasporti & Auto', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', icon: '🚗' },
+            'Svago': { label: 'Svago & Tempo Libero', color: '#ec4899', bg: '#fce7f3', text: '#9d174d', icon: '🍿' },
+            'Casa': { label: 'Casa & Bollette', color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', icon: '🏠' },
+            'Salute': { label: 'Salute & Benessere', color: '#10b981', bg: '#d1fae5', text: '#065f46', icon: '💊' },
+            'Shopping': { label: 'Shopping', color: '#06b6d4', bg: '#cffaff', text: '#155e75', icon: '🛍️' },
+            'Altro': { label: 'Altro', color: '#64748b', bg: '#f1f5f9', text: '#334155', icon: '📦' }
+        };
+
+        // --- STATO DELL'APPLICAZIONE ---
+        let expenses = JSON.parse(localStorage.getItem('expenses_data')) || [];
+        let categoryChart = null;
+
+        // DOM Elements
+        const expenseForm = document.getElementById('expense-form');
+        const expenseNameInput = document.getElementById('expense-name');
+        const expenseAmountInput = document.getElementById('expense-amount');
+        const expenseCategoryInput = document.getElementById('expense-category');
+        const expenseDateInput = document.getElementById('expense-date');
+
+        const kpiToday = document.getElementById('kpi-today');
+        const kpiTodayCount = document.getElementById('kpi-today-count');
+        const kpiMonth = document.getElementById('kpi-month');
+        const kpiMonthName = document.getElementById('kpi-month-name');
+        const kpiTopCategory = document.getElementById('kpi-top-category');
+        const kpiTopCategoryAmount = document.getElementById('kpi-top-category-amount');
+
+        const filterCategory = document.getElementById('filter-category');
+        const filterPeriod = document.getElementById('filter-period');
+        const resetFiltersBtn = document.getElementById('reset-filters');
+
+        const tableBody = document.getElementById('expense-table-body');
+        const emptyState = document.getElementById('empty-state');
+        const expenseCountBadge = document.getElementById('expense-count-badge');
+        const exportBtn = document.getElementById('export-btn');
+
+        // --- INIZIALIZZAZIONE ---
+        window.onload = function() {
+            // Imposta la data di default ad OGGI (YYYY-MM-DD)
+            const today = new Date().toISOString().split('T')[0];
+            expenseDateInput.value = today;
+
+            // Inizializza Icone Lucide
+            lucide.createIcons();
+
+            // Inizializza Grafico
+            initChart();
+
+            // Renderizza i dati iniziali
+            renderApp();
+
+            // Event Listeners
+            expenseForm.addEventListener('submit', handleAddExpense);
+            filterCategory.addEventListener('change', renderApp);
+            filterPeriod.addEventListener('change', renderApp);
+            resetFiltersBtn.addEventListener('click', resetFilters);
+            exportBtn.addEventListener('click', exportDataJSON);
+        };
+
+        // --- SALVATAGGIO SU LOCALSTORAGE ---
+        function saveExpenses() {
+            localStorage.setItem('expenses_data', JSON.stringify(expenses));
+        }
+
+        // --- AGGIUNTA DI UNA SPESA ---
+        function handleAddExpense(e) {
+            e.preventDefault();
+
+            const newExpense = {
+                id: Date.now().toString(),
+                name: expenseNameInput.value.trim(),
+                amount: parseFloat(expenseAmountInput.value),
+                category: expenseCategoryInput.value,
+                date: expenseDateInput.value
+            };
+
+            if (!newExpense.name || isNaN(newExpense.amount) || newExpense.amount <= 0) {
+                return;
+            }
+
+            expenses.unshift(newExpense); // Aggiunge in cima
+            saveExpenses();
+
+            // Reset Form (mantenendo la data corrente)
+            expenseNameInput.value = '';
+            expenseAmountInput.value = '';
+            expenseCategoryInput.value = 'Cibo';
+            expenseDateInput.value = new Date().toISOString().split('T')[0];
+
+            renderApp();
+        }
+
+        // --- ELIMINAZIONE SPESA ---
+        function deleteExpense(id) {
+            expenses = expenses.filter(expense => expense.id !== id);
+            saveExpenses();
+            renderApp();
+        }
+
+        // --- RESET FILTRI ---
+        function resetFilters() {
+            filterCategory.value = 'ALL';
+            filterPeriod.value = 'MONTH';
+            renderApp();
+        }
+
+        // --- RENDERING GENERALE ---
+        function renderApp() {
+            const filteredExpenses = getFilteredExpenses();
+
+            // Aggiorna KPI e Grafico con la lista completa o filtrata opportunamente
+            updateKPIs();
+            updateChart();
+
+            // Popola Tabella
+            renderTable(filteredExpenses);
+
+            // Re-inizializza le icone aggiunte dinamicamente
+            lucide.createIcons();
+        }
+
+        // --- FILTRAGGIO SPESE PER LA TABELLA ---
+        function getFilteredExpenses() {
+            const selectedCategory = filterCategory.value;
+            const selectedPeriod = filterPeriod.value;
+            const todayStr = new Date().toISOString().split('T')[0];
+            const currentMonthStr = todayStr.substring(0, 7); // YYYY-MM
+
+            return expenses.filter(item => {
+                // Filtro Categoria
+                const matchCategory = (selectedCategory === 'ALL') || (item.category === selectedCategory);
+
+                // Filtro Periodo
+                let matchPeriod = true;
+                if (selectedPeriod === 'TODAY') {
+                    matchPeriod = (item.date === todayStr);
+                } else if (selectedPeriod === 'MONTH') {
+                    matchPeriod = (item.date.substring(0, 7) === currentMonthStr);
+                }
+
+                return matchCategory && matchPeriod;
+            });
+        }
+
+        // --- CALCOLO E AGGIORNAMENTO DASHBOARD / KPI ---
+        function updateKPIs() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const currentMonthStr = todayStr.substring(0, 7);
+
+            // Spese Oggi
+            const todayExpenses = expenses.filter(e => e.date === todayStr);
+            const todayTotal = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+            kpiToday.textContent = formatCurrency(todayTotal);
+            kpiTodayCount.textContent = `${todayExpenses.length} ${todayExpenses.length === 1 ? 'transazione' : 'transazioni'} oggi`;
+
+            // Spese Mese
+            const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonthStr);
+            const monthTotal = monthExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+            kpiMonth.textContent = formatCurrency(monthTotal);
+
+            const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+            const currentMonthIndex = new Date().getMonth();
+            kpiMonthName.textContent = `Totale di ${monthNames[currentMonthIndex]}`;
+
+            // Maggior Categoria del Mese
+            const categoryTotals = {};
+            monthExpenses.forEach(e => {
+                categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+            });
+
+            let topCategory = 'N/D';
+            let topAmount = 0;
+
+            for (const [cat, amt] of Object.entries(categoryTotals)) {
+                if (amt > topAmount) {
+                    topAmount = amt;
+                    topCategory = cat;
+                }
+            }
+
+            if (topCategory !== 'N/D') {
+                kpiTopCategory.textContent = `${CATEGORIES[topCategory]?.icon || ''} ${topCategory}`;
+                kpiTopCategoryAmount.textContent = `${formatCurrency(topAmount)} nel mese`;
+            } else {
+                kpiTopCategory.textContent = 'N/D';
+                kpiTopCategoryAmount.textContent = '€ 0,00 totali';
+            }
+        }
+
+        // --- RENDERING TABELLA SPESE ---
+        function renderTable(dataList) {
+            tableBody.innerHTML = '';
+            expenseCountBadge.textContent = dataList.length;
+
+            if (dataList.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            // Ordina per data decrescente (più recenti prima)
+            const sorted = [...dataList].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            sorted.forEach(item => {
+                const cat = CATEGORIES[item.category] || CATEGORIES['Altro'];
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition-colors group';
+
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-mono text-xs text-slate-500 whitespace-nowrap">
+                        ${formatDate(item.date)}
+                    </td>
+                    <td class="py-3.5 px-4 font-medium text-slate-900">
+                        ${escapeHTML(item.name)}
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold" style="background-color: ${cat.bg}; color: ${cat.text}">
+                            <span class="mr-1">${cat.icon}</span> ${item.category}
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4 font-bold text-slate-900 text-right whitespace-nowrap">
+                        - ${formatCurrency(item.amount)}
+                    </td>
+                    <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                        <button onclick="deleteExpense('${item.id}')" class="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors" title="Elimina spesa">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // --- INIZIALIZZAZIONE CHART.JS ---
+        function initChart() {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            categoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 15,
+                                font: { family: 'Inter', size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw || 0;
+                                    return ` ${context.label}: € ${value.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // --- AGGIORNAMENTO GRAFICO ---
+        function updateChart() {
+            const currentMonthStr = new Date().toISOString().split('T')[0].substring(0, 7);
+            const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonthStr);
+
+            const noDataEl = document.getElementById('no-chart-data');
+
+            if (monthExpenses.length === 0) {
+                noDataEl.classList.remove('hidden');
+                categoryChart.data.labels = [];
+                categoryChart.data.datasets[0].data = [];
+                categoryChart.update();
+                return;
+            } else {
+                noDataEl.classList.add('hidden');
+            }
+
+            const totalsByCategory = {};
+            monthExpenses.forEach(e => {
+                totalsByCategory[e.category] = (totalsByCategory[e.category] || 0) + e.amount;
+            });
+
+            const labels = [];
+            const data = [];
+            const colors = [];
+
+            Object.keys(totalsByCategory).forEach(catKey => {
+                labels.push(catKey);
+                data.push(totalsByCategory[catKey]);
+                colors.push(CATEGORIES[catKey]?.color || '#64748b');
+            });
+
+            categoryChart.data.labels = labels;
+            categoryChart.data.datasets[0].data = data;
+            categoryChart.data.datasets[0].backgroundColor = colors;
+            categoryChart.update();
+        }
+
+        // --- UTILITIES / FORMATTAZIONE ---
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const parts = dateString.split('-');
+            if (parts.length !== 3) return dateString;
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function exportDataJSON() {
+            if (expenses.length === 0) {
+                alert('Nessuna spesa da esportare.');
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(expenses, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `spese_export_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+    </script>
+</body>
+</html>
